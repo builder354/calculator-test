@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calculator</title>
+<meta name="description" content="A simple four-function calculator that works offline.">
+<meta name="theme-color" content="#e4e8ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14171c" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Calculator">
+<style>
+  /* Layout: one centered column, display on top, 4 × 6 key grid below. */
+  :root {
+    --bg: #e4e8ee;
+    --panel: #d5dbe4;
+    --key: #fbfcfd;
+    --ink: #1a1f27;
+    --muted: #5d6878;
+    --accent: #1d5296;
+    --accent-ink: #ffffff;
+    --op: #d6e2f3;
+    --clear: #b23b22;
+    --clear-bg: #f3dfd9;
+    --shadow: rgba(28, 40, 60, 0.18);
+    --font-ui: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    --font-num: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171c;
+      --panel: #0d0f13;
+      --key: #252a32;
+      --ink: #eef1f5;
+      --muted: #8994a5;
+      --accent: #5c9ae8;
+      --accent-ink: #0a1424;
+      --op: #1e2c40;
+      --clear: #f08a70;
+      --clear-bg: #3a2420;
+      --shadow: rgba(0, 0, 0, 0.45);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14171c;
+    --panel: #0d0f13;
+    --key: #252a32;
+    --ink: #eef1f5;
+    --muted: #8994a5;
+    --accent: #5c9ae8;
+    --accent-ink: #0a1424;
+    --op: #1e2c40;
+    --clear: #f08a70;
+    --clear-bg: #3a2420;
+    --shadow: rgba(0, 0, 0, 0.45);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    display: grid;
+    place-items: center;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .calc {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .screen {
+    background: var(--panel);
+    border-radius: 18px;
+    padding: 18px 20px 14px;
+    min-height: 128px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-end;
+    gap: 4px;
+    box-shadow: inset 0 2px 6px var(--shadow);
+    overflow: hidden;
+  }
+  .history {
+    font-size: 16px;
+    color: var(--muted);
+    min-height: 1.3em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: right;
+  }
+  .value {
+    font-family: var(--font-num);
+    font-weight: 500;
+    font-size: 56px;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  .value.error { color: var(--clear); font-size: 30px; }
+
+  .keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: 1fr;      /* every row as tall as a square key */
+    gap: 10px;
+  }
+  .keys button {
+    font: inherit;
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--ink);
+    background: var(--key);
+    border: 0;
+    border-radius: 16px;
+    aspect-ratio: 1.15;
+    cursor: pointer;
+    box-shadow: 0 2px 0 var(--shadow);
+    transition: transform 60ms ease, filter 60ms ease;
+    touch-action: manipulation;
+  }
+  .keys button:active, .keys button.pressed { transform: translateY(2px); box-shadow: 0 0 0 var(--shadow); filter: brightness(0.94); }
+  .keys button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .keys .op { background: var(--op); color: var(--accent); font-size: 30px; }
+  .keys .op[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .keys .clear { background: var(--clear-bg); color: var(--clear); grid-column: span 3; aspect-ratio: auto; font-size: 22px; letter-spacing: 0.04em; }
+  .keys .zero { grid-column: span 2; aspect-ratio: auto; }
+  .keys .equals { grid-column: span 2; aspect-ratio: auto; background: var(--accent); color: var(--accent-ink); font-size: 30px; }
+
+  .install {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 14px;
+    color: var(--muted);
+    padding: 0 4px;
+  }
+  .install.show { display: flex; }
+  .install button {
+    font: inherit;
+    font-size: 14px;
+    color: var(--accent);
+    background: none;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    padding: 6px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .install button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .keys button { transition: none; }
+  }
+  @media (max-height: 640px) {
+    .keys button { aspect-ratio: 1.45; }
+    .screen { min-height: 100px; }
+  }
+</style>
+</head>
+<body>
+<main class="calc" aria-label="Calculator">
+  <div class="screen">
+    <div class="history" id="history" aria-hidden="true"></div>
+    <output class="value" id="value" aria-live="polite">0</output>
+  </div>
+
+  <div class="keys" id="keys">
+    <button type="button" class="clear" id="key-clear" data-action="clear" aria-label="Clear">C</button>
+    <button type="button" class="op" id="key-div" data-op="/" aria-label="Divide" aria-pressed="false">&divide;</button>
+
+    <button type="button" id="key-7" data-digit="7">7</button>
+    <button type="button" id="key-8" data-digit="8">8</button>
+    <button type="button" id="key-9" data-digit="9">9</button>
+    <button type="button" class="op" id="key-mul" data-op="*" aria-label="Multiply" aria-pressed="false">&times;</button>
+
+    <button type="button" id="key-4" data-digit="4">4</button>
+    <button type="button" id="key-5" data-digit="5">5</button>
+    <button type="button" id="key-6" data-digit="6">6</button>
+    <button type="button" class="op" id="key-sub" data-op="-" aria-label="Subtract" aria-pressed="false">&minus;</button>
+
+    <button type="button" id="key-1" data-digit="1">1</button>
+    <button type="button" id="key-2" data-digit="2">2</button>
+    <button type="button" id="key-3" data-digit="3">3</button>
+    <button type="button" class="op" id="key-add" data-op="+" aria-label="Add" aria-pressed="false">+</button>
+
+    <button type="button" class="zero" id="key-0" data-digit="0">0</button>
+    <button type="button" class="equals" id="key-equals" data-action="equals" aria-label="Equals">=</button>
+  </div>
+
+  <div class="install" id="install">
+    <span id="install-text">Install this calculator as an app.</span>
+    <button type="button" id="install-btn">Install</button>
+  </div>
+</main>
+
+<script src="calc.js"></script>
+<script>
+(function () {
+  "use strict";
+  var state = Calc.initial();
+  var valueEl = document.getElementById("value");
+  var historyEl = document.getElementById("history");
+  var opKeys = document.querySelectorAll(".op");
+
+  function fit() {
+    // Shrink the main number so long results stay on one line.
+    valueEl.style.fontSize = "";
+    if (valueEl.classList.contains("error")) return;
+    var size = 56;
+    var max = valueEl.parentElement.clientWidth - 40;
+    while (valueEl.scrollWidth > max && size > 22) {
+      size -= 2;
+      valueEl.style.fontSize = size + "px";
+    }
+  }
+
+  function render() {
+    valueEl.textContent = Calc.display(state);
+    valueEl.classList.toggle("error", !!state.error);
+    historyEl.textContent = state.history;
+    for (var i = 0; i < opKeys.length; i++) {
+      var k = opKeys[i];
+      var on = !state.error && state.op === k.getAttribute("data-op") && !state.typing;
+      k.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    fit();
+  }
+
+  function press(action, arg) {
+    if (action === "digit") state = Calc.digit(state, arg);
+    else if (action === "op") state = Calc.operator(state, arg);
+    else if (action === "equals") state = Calc.equals(state);
+    else if (action === "clear") state = Calc.clear();
+    render();
+  }
+
+  document.getElementById("keys").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    if (b.hasAttribute("data-digit")) press("digit", b.getAttribute("data-digit"));
+    else if (b.hasAttribute("data-op")) press("op", b.getAttribute("data-op"));
+    else press(b.getAttribute("data-action"));
+  });
+
+  // Keyboard: digits, + - * / (x also multiplies), Enter or = , Escape or C to clear.
+  var keyMap = { "+": "key-add", "-": "key-sub", "*": "key-mul", "x": "key-mul", "X": "key-mul", "/": "key-div",
+                 "Enter": "key-equals", "=": "key-equals", "Escape": "key-clear", "c": "key-clear", "C": "key-clear",
+                 "Delete": "key-clear" };
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var id = /^[0-9]$/.test(e.key) ? "key-" + e.key : keyMap[e.key];
+    if (!id) return;
+    e.preventDefault();
+    var b = document.getElementById(id);
+    b.classList.add("pressed");
+    setTimeout(function () { b.classList.remove("pressed"); }, 90);
+    b.click();
+  });
+
+  window.addEventListener("resize", fit);
+  render();
+
+  // ---- Installing as an app ----
+  var bar = document.getElementById("install");
+  var text = document.getElementById("install-text");
+  var btn = document.getElementById("install-btn");
+  var deferred = null;
+
+  function remembered() { try { return localStorage.getItem("install-dismissed") === "1"; } catch (e) { return false; } }
+  function remember() { try { localStorage.setItem("install-dismissed", "1"); } catch (e) {} }
+
+  var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var embedded = window.self !== window.top;
+
+  // Chrome, Edge and Android offer an install prompt we can trigger.
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    deferred = e;
+    if (!remembered()) bar.classList.add("show");
+  });
+
+  // iPhone and iPad have no install prompt, so explain the steps once.
+  if (isIOS && !standalone && !embedded && !remembered()) {
+    text.textContent = "To install: tap Share, then Add to Home Screen.";
+    btn.textContent = "Got it";
+    bar.classList.add("show");
+  }
+
+  btn.addEventListener("click", function () {
+    if (deferred) {
+      deferred.prompt();
+      deferred = null;
+    }
+    remember();
+    bar.classList.remove("show");
+  });
+
+  window.addEventListener("appinstalled", function () { bar.classList.remove("show"); });
+
+  // Offline support. Service workers need https (or localhost); skipped elsewhere.
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+    window.addEventListener("load", function () {
+      try {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+      } catch (e) {}
+    });
+  }
+})();
+</script>
+</body>
+</html>
